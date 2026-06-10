@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RunguAksara - Ruang Kerja Cerdas</title>
+  <!-- Google Fonts: Fira Code & Fira Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Local Compiled Tailwind CSS -->
+  <link href="tailwind.css" rel="stylesheet">
+  <link href="style.css" rel="stylesheet">
+</head>
+<body class="bg-[#F4F4F6] text-[#393C41] font-sans min-h-screen flex flex-col antialiased relative overflow-x-hidden selection:bg-[#3E6AE1]/20">
+
+  <!-- Atmospheric Background Subtle Light Blobs -->
+  <div class="absolute top-0 right-0 w-[500px] h-[500px] bg-[#3E6AE1]/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+  <div class="absolute top-1/2 left-0 -translate-x-1/3 w-[600px] h-[600px] bg-emerald-500/2 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+
+  <!-- Decorative Grid Overlay -->
+  <div class="absolute inset-0 bg-[linear-gradient(to_right,#cbd5e115_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e115_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none -z-10"></div>
+
+  <!-- Navigation Bar -->
+  <nav class="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-xl border-b border-slate-200 px-6 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
+    <div class="max-w-7xl w-full mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <img src="runguaksara_logo.png" alt="RunguAksara Logo" class="h-9 w-9 rounded-[4px] object-cover shadow-sm">
+        <div>
+          <h1 class="font-mono font-bold text-sm md:text-base tracking-tight text-[#121212] flex items-center gap-2">
+            RunguAksara
+            <span class="text-[9px] px-2 py-0.5 rounded-full bg-[#3E6AE1]/10 text-[#3E6AE1] font-semibold border border-[#3E6AE1]/20">v1.1.0</span>
+          </h1>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-2 md:gap-3">
+        <button id="btn-dashboard" class="px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-[4px] text-slate-650 hover:text-[#121212] hover:bg-slate-100 transition-all duration-200 cursor-pointer">
+          Dashboard
+        </button>
+        <button id="btn-profile" class="px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-[4px] text-slate-650 hover:text-[#121212] hover:bg-slate-100 transition-all duration-200 cursor-pointer">
+          Profil Saya
+        </button>
+        <button id="btn-new-meeting" class="px-3 md:px-4 py-1.5 bg-[#3E6AE1] hover:bg-[#2F5BD2] text-white rounded-[4px] text-xs md:text-sm font-semibold flex items-center gap-1.5 transition-all duration-300 cursor-pointer shadow-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Rapat Baru
+        </button>
+        <div class="h-6 w-[1px] bg-slate-200 mx-1 hidden md:block"></div>
+        <span id="user-display-name" class="text-xs font-semibold text-[#121212] font-mono hidden md:inline select-none bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full">User</span>
+        <button id="btn-logout" class="px-2.5 md:px-3.5 py-1.5 border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-650 hover:text-red-600 rounded-[4px] text-xs font-semibold transition-all duration-200 cursor-pointer">
+          Keluar
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content Container -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-8 relative">
+    
+    <!-- View 1: Dashboard (Session List) -->
+    <section id="view-dashboard" class="space-y-8">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
+        <div class="space-y-1">
+          <h2 class="text-3xl font-mono font-bold text-[#121212] tracking-tight">Daftar Sesi Rapat</h2>
+          <p class="text-slate-500 text-xs md:text-sm font-light">Kelola dokumen transkripsi dan ringkasan rapat dinas secara otomatis.</p>
+        </div>
+        <!-- Search bar -->
+        <div class="relative w-full md:w-80">
+          <input id="search-sessions" type="text" placeholder="Cari rapat..." class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-4 py-2.5 pl-10 text-sm text-slate-800 transition-all duration-200">
+          <svg xmlns="http://www.w3.org/2000/svg" class="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- Bento Grid Stats Section -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Stat Card 1 -->
+        <div class="bg-white border border-slate-200 border-l-4 border-l-[#3E6AE1] rounded-r-[8px] rounded-l-[4px] p-5 flex items-center justify-between hover:border-slate-300 transition-colors">
+          <div class="space-y-1">
+            <p class="text-[10px] text-slate-500 font-semibold uppercase tracking-widest font-mono">Total Rapat</p>
+            <h3 id="stat-sessions-count" class="text-3xl font-mono font-bold text-[#121212] tracking-tight">0</h3>
+            <p class="text-[10px] text-slate-400 font-light">Sesi terdaftar dalam sistem</p>
+          </div>
+          <div class="text-[#3E6AE1]">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+        </div>
+        <!-- Stat Card 2 -->
+        <div class="bg-white border border-slate-200 border-l-4 border-l-emerald-500 rounded-r-[8px] rounded-l-[4px] p-5 flex items-center justify-between hover:border-slate-300 transition-colors">
+          <div class="space-y-1">
+            <p class="text-[10px] text-slate-500 font-semibold uppercase tracking-widest font-mono">Transkrip Live</p>
+            <h3 id="stat-transcripts-count" class="text-3xl font-mono font-bold text-[#121212] tracking-tight">0</h3>
+            <p class="text-[10px] text-slate-400 font-light">Segmen suara terproses AI</p>
+          </div>
+          <div class="text-emerald-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+          </div>
+        </div>
+        <!-- Stat Card 3 -->
+        <div class="bg-white border border-slate-200 border-l-4 border-l-amber-500 rounded-r-[8px] rounded-l-[4px] p-5 flex items-center justify-between hover:border-slate-300 transition-colors">
+          <div class="space-y-1">
+            <p class="text-[10px] text-slate-500 font-semibold uppercase tracking-widest font-mono">Tindak Lanjut</p>
+            <h3 id="stat-actions-percent" class="text-3xl font-mono font-bold text-[#121212] tracking-tight">0%</h3>
+            <p id="stat-actions-fraction" class="text-[10px] text-slate-400 font-light">0 dari 0 tugas selesai</p>
+          </div>
+          <div class="text-amber-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid list of sessions -->
+      <div id="sessions-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Loader -->
+        <div class="col-span-full py-20 flex flex-col items-center justify-center text-slate-500">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3E6AE1] mb-4"></div>
+          <p class="text-sm">Memuat data rapat...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 2: Create Session Form -->
+    <section id="view-create-session" class="hidden max-w-2xl mx-auto bg-white border border-slate-200 rounded-[8px] p-6 md:p-10 shadow-sm">
+      <div class="border-b border-slate-200 pb-5 mb-6">
+        <h2 class="text-2xl font-heading font-bold text-[#121212] tracking-tight">Buat Sesi Rapat Baru</h2>
+        <p class="text-slate-500 text-xs md:text-sm mt-1 font-light">Lengkapi metadata rapat koordinasi untuk memulai asisten notulen AI.</p>
+      </div>
+
+      <form id="form-create" class="space-y-6">
+        <div class="space-y-2">
+          <label for="input-title" class="text-xs font-semibold text-slate-600 uppercase tracking-widest">Judul Rapat <span class="text-red-500">*</span></label>
+          <input type="text" id="input-title" required placeholder="Contoh: Rapat Sinkronisasi Program Wilayah Timur" class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-4 py-3 text-sm text-slate-800 transition-all duration-200">
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="space-y-2">
+            <label for="input-date" class="text-xs font-semibold text-slate-600 uppercase tracking-widest">Tanggal Rapat</label>
+            <input type="date" id="input-date" class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-4 py-3 text-sm text-slate-800 transition-all duration-200">
+          </div>
+          <div class="space-y-2">
+            <label for="input-location" class="text-xs font-semibold text-slate-600 uppercase tracking-widest">Lokasi / Media</label>
+            <input type="text" id="input-location" placeholder="Contoh: Ruang Rapat Lt. 2 / Zoom" class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-4 py-3 text-sm text-slate-800 transition-all duration-200">
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label for="input-agenda" class="text-xs font-semibold text-slate-600 uppercase tracking-widest">Agenda Rapat</label>
+          <textarea id="input-agenda" rows="3" placeholder="Deskripsikan agenda utama atau pokok pembahasan rapat..." class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-4 py-3 text-sm text-slate-800 transition-all duration-200"></textarea>
+        </div>
+
+        <!-- Participant Input Section -->
+        <div class="space-y-4 border-t border-slate-200 pt-6">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-slate-600 uppercase tracking-widest">Daftar Hadir Peserta</label>
+            <button type="button" id="btn-add-participant" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-[#393C41] border border-slate-250 rounded-[4px] text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer">
+              + Tambah Row
+            </button>
+          </div>
+          
+          <div id="participants-container" class="space-y-3 max-h-56 overflow-y-auto pr-1">
+            <!-- First participant row -->
+            <div class="grid grid-cols-12 gap-3 participant-row bg-slate-50/50 p-3 rounded-[8px] border border-slate-200">
+              <input type="text" placeholder="Nama Peserta" class="col-span-5 bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2 text-xs text-slate-800" required>
+              <input type="text" placeholder="Jabatan" class="col-span-4 bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2 text-xs text-slate-800">
+              <input type="text" placeholder="Unit Kerja" class="col-span-2 bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2 text-xs text-slate-800" value="Internal">
+              <button type="button" class="col-span-1 text-red-500 hover:text-red-600 flex items-center justify-center btn-remove-participant text-lg font-bold cursor-pointer">&times;</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-6 mt-6">
+          <button type="button" id="btn-cancel-create" class="px-5 py-2.5 border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50 rounded-[4px] text-sm font-medium transition-all cursor-pointer">
+            Batal
+          </button>
+          <button type="submit" class="px-5 py-2.5 bg-[#3E6AE1] hover:bg-[#2F5BD2] text-white rounded-[4px] text-sm font-semibold transition-all shadow-sm cursor-pointer">
+            Mulai Rapat
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- View 3: Session Details Workspace (The Core App) -->
+    <section id="view-session-details" class="hidden space-y-6">
+      
+      <!-- Top Title and Info Card -->
+      <div class="bg-white border border-slate-200 rounded-[8px] p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <span id="session-badge-status" class="text-[10px] px-2.5 py-0.5 rounded-full font-semibold border">Draft</span>
+            <span id="session-detail-date" class="text-xs text-slate-500 font-light">09 Juni 2026</span>
+          </div>
+          <h2 id="session-detail-title" class="text-2xl md:text-3xl font-heading font-bold text-[#121212] tracking-tight">Rapat Sinkronisasi Infrastruktur Papua</h2>
+          <div class="flex flex-wrap gap-4 text-xs text-slate-500 mt-2 font-light">
+            <div class="flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-[#3E6AE1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span id="session-detail-location">Lt. 2 Ruang Rapat</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-[#3E6AE1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <span id="session-detail-participants-count">3 Peserta</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="btn-back" class="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-[#121212] rounded-[4px] text-sm font-medium transition-all flex items-center gap-2 cursor-pointer">
+            &larr; Dashboard
+          </button>
+          <button id="btn-edit-session" class="px-4 py-2 border border-slate-200 hover:border-[#3E6AE1]/30 hover:bg-[#3E6AE1]/5 text-slate-700 hover:text-[#3E6AE1] rounded-[4px] text-sm font-medium transition-all flex items-center gap-2 cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-[#3E6AE1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Edit Rapat
+          </button>
+          <button id="btn-export-word" class="hidden px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[4px] text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Ekspor Word
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Workspace Grid layout -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        
+        <!-- Column 1: Audio Hub & Participants List -->
+        <div class="space-y-6">
+          
+          <!-- Audio Hub (Upload & Live Record) -->
+          <div class="bg-white border border-slate-200 rounded-[8px] p-6 shadow-sm space-y-6">
+            <h3 class="font-heading font-semibold text-lg text-[#121212] flex items-center gap-2 border-b border-slate-200 pb-3">
+              <span class="h-2.5 w-2.5 rounded-full bg-[#3E6AE1]"></span>
+              Input Media Rapat
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              <!-- Tab 1: Live Record -->
+              <div class="flex flex-col items-center justify-center p-6 bg-slate-50/50 border border-slate-200/85 rounded-[8px] text-center space-y-4 w-full">
+                <!-- Audio Source Selection -->
+                <div class="w-full text-left space-y-1">
+                  <label for="select-audio-source" class="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Sumber Suara</label>
+                  <select id="select-audio-source" class="w-full bg-white border border-slate-200 text-slate-700 rounded-[4px] px-3 py-2 text-xs focus:outline-none focus:border-[#3E6AE1] focus:ring-2 focus:ring-[#3E6AE1]/10 transition-colors">
+                    <option value="mic">Microphone (Internal/Eksternal)</option>
+                    <option value="system">Tab / Window (Audio Sistem)</option>
+                  </select>
+                </div>
+
+                <!-- Live Speaker Switcher (Hidden when not recording) -->
+                <div id="live-speaker-container" class="hidden w-full text-left space-y-2 border-t border-slate-200 pt-3 mt-1">
+                  <label class="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-1.5">Pembicara Aktif (Klik/Hotkey 1-9 untuk ganti + Cut Off)</label>
+                  <div id="live-speaker-pills" class="flex flex-wrap gap-2 max-h-24 overflow-y-auto pr-1">
+                    <!-- Dynamically filled with speaker pills -->
+                  </div>
+                  <!-- Hidden input to store active speaker name -->
+                  <input type="hidden" id="select-live-speaker" value="">
+                  <button type="button" id="btn-cut-off" class="hidden"></button>
+                </div>
+
+                <div id="record-circle" class="h-16 w-16 rounded-full bg-red-50 border border-red-200/50 flex items-center justify-center transition-all duration-300">
+                  <button id="btn-record-mic" class="h-12 w-12 rounded-full bg-red-650 hover:bg-red-700 flex items-center justify-center shadow-sm transition-all duration-300 cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                      <path d="M19 10v1a7 7 0 0 1-14 0v-1H3v1a9 9 0 0 0 8 8.94V21h2v-2.06A9 9 0 0 0 21 11v-1h-2z"/>
+                    </svg>
+                  </button>
+                </div>
+                <div>
+                  <h4 id="record-status" class="text-sm font-semibold text-[#393C41]">Mulai Rekam Suara</h4>
+                  <p id="record-timer" class="text-xs text-slate-500 mt-1 font-mono tracking-wider">00:00:00</p>
+                </div>
+                
+                <!-- Live Mic Visualizer -->
+                <div id="mic-visualizer" class="hidden flex items-center gap-1.5 h-6">
+                  <span class="w-1 bg-[#3E6AE1] rounded-full animate-bar-1 h-3"></span>
+                  <span class="w-1 bg-[#3E6AE1] rounded-full animate-bar-2 h-5"></span>
+                  <span class="w-1 bg-blue-400 rounded-full animate-bar-3 h-2"></span>
+                  <span class="w-1 bg-blue-400 rounded-full animate-bar-4 h-6"></span>
+                  <span class="w-1 bg-[#3E6AE1] rounded-full animate-bar-5 h-4"></span>
+                </div>
+              </div>
+
+              <!-- Tab 2: Upload File -->
+              <div class="flex flex-col items-center justify-center p-6 bg-slate-50/50 border border-slate-200/85 rounded-[8px] text-center space-y-4 group hover:border-slate-300 transition-colors duration-200">
+                <div class="h-16 w-16 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-[#3E6AE1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <div class="space-y-1">
+                  <h4 class="text-sm font-semibold text-[#393C41]">Unggah Berkas Rekaman</h4>
+                  <p class="text-[11px] text-slate-500">Audio/Video (MP4, M4A, WAV) Max 100MB</p>
+                </div>
+                <input type="file" id="file-audio-upload" accept="audio/*,video/*" class="hidden">
+                <button id="btn-trigger-upload" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-[#121212] rounded-[4px] text-xs font-semibold transition-all cursor-pointer">
+                  Pilih Berkas
+                </button>
+              </div>
+
+            </div>
+
+            <!-- Upload progress bar -->
+            <div id="upload-progress-container" class="hidden bg-slate-50 p-4 rounded-[8px] border border-slate-200 space-y-2">
+              <div class="flex justify-between text-xs font-medium">
+                <span class="text-slate-700" id="upload-status-label">Mengunggah file...</span>
+                <span class="text-[#3E6AE1] font-semibold" id="upload-percent">0%</span>
+              </div>
+              <div class="w-full bg-white rounded-full h-2 overflow-hidden border border-slate-200">
+                <div id="upload-progress-bar" class="bg-[#3E6AE1] h-full w-0 transition-all duration-300"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Participants Panel -->
+          <div class="bg-white border border-slate-200 rounded-[8px] p-6 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 class="font-heading font-semibold text-base text-[#121212] flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-[#3E6AE1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Daftar Peserta Rapat
+              </h3>
+              <span id="participants-count-badge" class="text-xs px-3 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-500">0 Orang</span>
+            </div>
+
+            <!-- Participants List -->
+            <div id="participants-list" class="space-y-2 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
+              <!-- Rendered by JS -->
+              <div class="py-6 flex flex-col items-center justify-center text-slate-500 text-xs">
+                <p>Memuat peserta...</p>
+              </div>
+            </div>
+
+            <!-- Add Participant Form (collapsible) -->
+            <div class="border-t border-slate-200 pt-3">
+              <button id="btn-toggle-add-participant" type="button"
+                class="w-full flex items-center justify-center gap-2 py-2 px-4 bg-slate-50/50 hover:bg-slate-50 border border-dashed border-slate-250 text-slate-550 hover:text-[#3E6AE1] hover:border-[#3E6AE1] rounded-[8px] text-xs font-semibold transition-all duration-200 cursor-pointer">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Tambah Peserta
+              </button>
+
+              <!-- Inline Add Form (hidden by default) -->
+              <div id="add-participant-form-container" class="hidden mt-3 bg-slate-50/50 border border-slate-200 rounded-[8px] p-4 space-y-3">
+                <p class="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Data Peserta Baru</p>
+                <input id="input-participant-name" type="text" placeholder="Nama Lengkap *"
+                  class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2 text-xs text-slate-800 transition-colors">
+                <div class="grid grid-cols-2 gap-2">
+                  <input id="input-participant-position" type="text" placeholder="Jabatan"
+                    class="bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2 text-xs text-slate-800 transition-colors">
+                  <input id="input-participant-unit" type="text" placeholder="Unit Kerja" value="Internal"
+                    class="bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2 text-xs text-slate-800 transition-colors">
+                </div>
+                <div class="flex gap-2 pt-1">
+                  <button id="btn-save-participant" type="button"
+                    class="flex-grow py-2 bg-[#3E6AE1] hover:bg-[#2F5BD2] text-white rounded-[4px] text-xs font-semibold transition-all cursor-pointer">
+                    Simpan Peserta
+                  </button>
+                  <button id="btn-cancel-add-participant" type="button"
+                    class="px-4 py-2 border border-slate-200 text-slate-650 hover:bg-slate-50 rounded-[4px] text-xs font-medium transition-all cursor-pointer">
+                    Batal
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+        
+        <!-- Column 2: Transcripts Panel -->
+        <div class="space-y-6">
+          
+          <!-- Transcript Panel -->
+          <div class="bg-white border border-slate-200 rounded-[8px] p-6 shadow-sm space-y-4 flex flex-col min-h-[400px] lg:min-h-[750px]">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 class="font-heading font-semibold text-lg text-[#121212] flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-[#3E6AE1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+                Transkrip Rapat (AI)
+              </h3>
+              <span id="transcript-count" class="text-xs px-3 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-500">0 Segmen</span>
+            </div>
+            
+            <!-- Transcript Segments Area -->
+            <div id="transcripts-list" class="flex-grow space-y-4 overflow-y-auto max-h-[500px] lg:max-h-[640px] pr-2 scrollbar-thin">
+              <!-- Empty state -->
+              <div class="h-full flex flex-col items-center justify-center text-center p-8 py-20 text-slate-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-slate-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <p class="text-sm font-semibold">Belum ada transkrip.</p>
+                <p class="text-xs text-slate-500 max-w-xs mt-1 font-light">Gunakan mikrofon browser atau unggah rekaman audio rapat di atas untuk menghasilkan transkrip.</p>
+              </div>
+            </div>
+
+            <!-- Generate Minutes Button -->
+            <div id="action-generate-container" class="hidden pt-4 border-t border-slate-200">
+              <button id="btn-generate-minutes" class="w-full py-3 bg-[#3E6AE1] hover:bg-[#2F5BD2] text-white rounded-[4px] text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-sm cursor-pointer">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 9.172V5L8 4z" />
+                </svg>
+                Generate Notulensi AI Cerdas
+              </button>
+            </div>
+          </div>
+          
+        </div>
+        
+        <!-- Column 3: AI Minutes & Action Items -->
+        <div class="space-y-6">
+          
+          <!-- AI Minutes Output Preview / Editor -->
+          <div class="bg-white border border-slate-200 rounded-[8px] p-6 shadow-sm space-y-4 min-h-[400px] lg:min-h-[450px] flex flex-col">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 class="font-heading font-semibold text-lg text-[#121212] flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-[#3E6AE1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Hasil Notulensi Rapat (AI)
+              </h3>
+              <!-- Save button -->
+              <button id="btn-save-minutes" class="hidden px-2.5 py-1.5 bg-[#3E6AE1]/10 border border-[#3E6AE1]/20 hover:bg-[#3E6AE1]/20 text-[#3E6AE1] rounded-[4px] text-xs font-semibold transition-all cursor-pointer">Simpan Notulen</button>
+            </div>
+
+            <!-- Minutes Editor Area -->
+            <div id="minutes-content-area" class="flex-grow flex flex-col justify-center">
+              
+              <!-- Loader state -->
+              <div id="minutes-loader" class="hidden flex flex-col items-center justify-center py-20 text-slate-500">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3E6AE1] mb-4"></div>
+                <p class="text-sm font-semibold text-[#3E6AE1] animate-pulse">Menyusun Notulensi Rapat...</p>
+                <p class="text-[11px] text-slate-500 mt-1 max-w-xs text-center">Model AI sedang mengekstrak ringkasan jalannya rapat, hasil keputusan, dan action items.</p>
+              </div>
+
+              <!-- Empty State -->
+              <div id="minutes-empty-state" class="flex flex-col items-center justify-center text-center p-8 py-20 text-slate-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-slate-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                <p class="text-sm font-semibold">Notulensi belum dibuat.</p>
+                <p class="text-xs text-slate-500 max-w-xs mt-1 font-light">Selesaikan pengisian transkrip rapat terlebih dahulu, kemudian klik 'Generate Notulensi' di samping.</p>
+              </div>
+
+              <!-- Rich Text View/Edit Mode -->
+              <div id="minutes-editor-container" class="hidden flex-grow flex flex-col space-y-4">
+                <div id="minutes-rich-editor" contenteditable="true" class="flex-grow p-4 min-h-[300px] max-h-[500px] lg:max-h-[350px] overflow-y-auto bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[8px] text-slate-700 text-sm leading-relaxed outline-none select-text">
+                  <!-- AI generated content goes here -->
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Action Items Task List -->
+          <div id="action-items-container" class="hidden bg-white border border-slate-200 rounded-[8px] p-6 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 class="font-heading font-semibold text-base text-[#121212] flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-[#3E6AE1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Tindak Lanjut / Action Items
+              </h3>
+            </div>
+            
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
+                    <th class="py-2.5 pr-2">Tugas / Deskripsi</th>
+                    <th class="py-2.5 px-2 w-24">PIC</th>
+                    <th class="py-2.5 px-2 w-20">Tenggat</th>
+                    <th class="py-2.5 pl-2 w-16 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="action-items-tbody" class="text-slate-700 divide-y divide-slate-100">
+                  <!-- Rows go here -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Global Footer -->
+  <footer class="mt-auto border-t border-slate-200 bg-slate-100 py-6 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <p>&copy; 2026 RunguAksara - Transkrip & Notulensi Rapat.</p>
+      <p class="flex items-center gap-1.5">
+        <span>RunguAksara - Transkrip & Notulensi Rapat</span>
+        <span class="h-1.5 w-1.5 rounded-full bg-[#3E6AE1]"></span>
+        <span>Aman & Terenkripsi</span>
+      </p>
+    </div>
+  </footer>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 ease-out flex items-center gap-3 px-4.5 py-3 rounded-[8px] bg-white border border-slate-200 shadow-lg">
+    <div id="toast-icon-wrapper" class="h-6 w-6 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-600">
+      <!-- Icon goes here -->
+    </div>
+    <div class="text-xs font-semibold text-slate-800 font-heading" id="toast-message">Notifikasi baru.</div>
+  </div>
+
+  <!-- Modal Edit Metadata Rapat -->
+  <div id="modal-edit-session" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+    <div class="w-full max-w-lg bg-white border border-slate-200 rounded-[8px] p-6 md:p-8 shadow-xl relative space-y-6">
+      <div class="border-b border-slate-200 pb-4">
+        <h3 class="text-xl font-heading font-bold text-[#121212] tracking-tight">Edit Metadata Rapat</h3>
+        <p class="text-slate-500 text-xs mt-1">Ubah detail administrasi rapat koordinasi.</p>
+      </div>
+      <form id="form-edit-session" class="space-y-4">
+        <div class="space-y-1">
+          <label for="input-edit-title" class="text-[10px] font-semibold text-slate-650 uppercase tracking-widest">Judul Rapat *</label>
+          <input type="text" id="input-edit-title" required class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2.5 text-xs text-slate-800">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1">
+            <label for="input-edit-date" class="text-[10px] font-semibold text-slate-650 uppercase tracking-widest">Tanggal</label>
+            <input type="date" id="input-edit-date" class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2.5 text-xs text-slate-800">
+          </div>
+          <div class="space-y-1">
+            <label for="input-edit-location" class="text-[10px] font-semibold text-slate-650 uppercase tracking-widest">Lokasi</label>
+            <input type="text" id="input-edit-location" class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2.5 text-xs text-slate-800">
+          </div>
+        </div>
+        <div class="space-y-1">
+          <label for="input-edit-agenda" class="text-[10px] font-semibold text-slate-650 uppercase tracking-widest">Agenda Rapat</label>
+          <textarea id="input-edit-agenda" rows="3" class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2.5 text-xs text-slate-800"></textarea>
+        </div>
+        <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-4 mt-2">
+          <button type="button" id="btn-close-edit-modal" class="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-[4px] text-xs font-medium transition-all cursor-pointer">
+            Batal
+          </button>
+          <button type="submit" class="px-4 py-2 bg-[#3E6AE1] hover:bg-[#2F5BD2] text-white rounded-[4px] text-xs font-semibold transition-all shadow-sm cursor-pointer">
+            Simpan Perubahan
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <!-- Modal Edit Profil Pengguna -->
+  <div id="modal-profile" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+    <div class="w-full max-w-lg bg-white border border-slate-200 rounded-[8px] p-6 md:p-8 shadow-xl relative space-y-6">
+      <div class="border-b border-slate-200 pb-4">
+        <h3 class="text-xl font-heading font-bold text-[#121212] tracking-tight">Profil Saya</h3>
+        <p class="text-slate-500 text-xs mt-1">Lihat dan perbarui informasi profil dan kata sandi akun Anda.</p>
+      </div>
+      <form id="form-profile" class="space-y-4">
+        <div class="space-y-1">
+          <label class="text-[10px] font-semibold text-slate-650 uppercase tracking-widest block">Nama Pengguna</label>
+          <input type="text" id="input-profile-username" readonly class="w-full bg-slate-50 border border-slate-200 rounded-[4px] px-3 py-2.5 text-xs text-slate-500 cursor-not-allowed outline-none select-none">
+        </div>
+        <div class="space-y-1">
+          <label for="input-profile-fullname" class="text-[10px] font-semibold text-slate-650 uppercase tracking-widest block">Nama Lengkap *</label>
+          <input type="text" id="input-profile-fullname" required class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2.5 text-xs text-slate-800 transition-all">
+        </div>
+        <div class="space-y-1">
+          <label for="input-profile-email" class="text-[10px] font-semibold text-slate-650 uppercase tracking-widest block">Alamat Email *</label>
+          <input type="email" id="input-profile-email" required class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2.5 text-xs text-slate-800 transition-all">
+        </div>
+        
+        <!-- Password Change Section -->
+        <div class="border-t border-slate-100 pt-4 mt-2 space-y-3">
+          <h4 class="text-xs font-semibold text-slate-700">Ubah Kata Sandi (Opsional)</h4>
+          <div class="space-y-1">
+            <label for="input-profile-old-pass" class="text-[10px] font-semibold text-slate-650 uppercase tracking-widest block">Kata Sandi Saat Ini</label>
+            <input type="password" id="input-profile-old-pass" placeholder="Masukkan kata sandi lama jika ingin mengubah" class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2.5 text-xs text-slate-800 transition-all">
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1">
+              <label for="input-profile-new-pass" class="text-[10px] font-semibold text-slate-650 uppercase tracking-widest block">Kata Sandi Baru</label>
+              <input type="password" id="input-profile-new-pass" placeholder="Minimal 6 karakter" class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2.5 text-xs text-slate-800 transition-all">
+            </div>
+            <div class="space-y-1">
+              <label for="input-profile-confirm-pass" class="text-[10px] font-semibold text-slate-650 uppercase tracking-widest block">Konfirmasi Kata Sandi Baru</label>
+              <input type="password" id="input-profile-confirm-pass" placeholder="Ulangi kata sandi baru" class="w-full bg-white border border-slate-200 focus:border-[#3E6AE1] focus:ring-4 focus:ring-[#3E6AE1]/5 focus:outline-none rounded-[4px] px-3 py-2.5 text-xs text-slate-800 transition-all">
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-4 mt-2">
+          <button type="button" id="btn-disk-cleanup" class="px-4 py-2 mr-auto border border-amber-200 hover:bg-amber-50 text-amber-700 rounded-[4px] text-xs font-semibold cursor-pointer transition-all">
+            Bersihkan File Sampah
+          </button>
+          <button type="button" id="btn-close-profile-modal" class="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-[4px] text-xs font-medium transition-all cursor-pointer">
+            Batal
+          </button>
+          <button type="submit" class="px-4 py-2 bg-[#3E6AE1] hover:bg-[#2F5BD2] text-white rounded-[4px] text-xs font-semibold transition-all shadow-sm cursor-pointer">
+            Simpan Perubahan
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <!-- App Main Scripts -->
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+# Dependency directories
+node_modules/
+
+# Local configuration & credentials (CRITICAL: Do not commit)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Local Databases (JSON & SQLite leftover)
+db.json
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Uploads directory (Contains temporary audio recordings)
+uploads/*
+!uploads/.gitkeep
+
+# Logs and system files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+.vscode/
+.idea/
+.agent/

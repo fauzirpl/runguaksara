@@ -1,0 +1,131 @@
+/* Custom Animations & UI Overrides */
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Glassmorphism Styles (Light Theme overrides) */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.02);
+}
+
+.glass-panel-glow {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(62, 106, 225, 0.15);
+  box-shadow: 0 10px 40px rgba(62, 106, 225, 0.05);
+}
+
+/* Audio Recording Live Wave Animations (Fallback/default styles) */
+@keyframes barGrow1 {
+  0%, 100% { height: 6px; }
+  50% { height: 20px; }
+}
+@keyframes barGrow2 {
+  0%, 100% { height: 10px; }
+  50% { height: 24px; }
+}
+@keyframes barGrow3 {
+  0%, 100% { height: 4px; }
+  50% { height: 16px; }
+}
+@keyframes barGrow4 {
+  0%, 100% { height: 12px; }
+  50% { height: 26px; }
+}
+@keyframes barGrow5 {
+  0%, 100% { height: 8px; }
+  50% { height: 22px; }
+}
+
+.animate-bar-1 { animation: barGrow1 0.7s ease-in-out infinite; }
+.animate-bar-2 { animation: barGrow2 0.8s ease-in-out infinite 0.1s; }
+.animate-bar-3 { animation: barGrow3 0.6s ease-in-out infinite 0.2s; }
+.animate-bar-4 { animation: barGrow4 0.9s ease-in-out infinite 0.15s; }
+.animate-bar-5 { animation: barGrow5 0.75s ease-in-out infinite 0.05s; }
+
+/* Micro transition-colors & transitions */
+.transition-all-custom {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Glowing utilities */
+.glow-cyan {
+  box-shadow: 0 0 15px rgba(62, 106, 225, 0.15);
+}
+.glow-emerald {
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.15);
+}
+
+/* Speaker Pill styles */
+.speaker-pill {
+  transition: all 0.15s ease-in-out;
+}
+.speaker-pill:hover {
+  transform: translateY(-1px);
+}
+.speaker-pill.active {
+  background: rgba(62, 106, 225, 0.08);
+  border-color: rgba(62, 106, 225, 0.3);
+  color: #3e6ae1;
+}
+
+/* Chat timelines style */
+.chat-bubble-left {
+  position: relative;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
+}
+
+.chat-bubble-live {
+  position: relative;
+  background: rgba(62, 106, 225, 0.01);
+  border: 1px solid rgba(62, 106, 225, 0.1);
+}
+
+/* Prose/Rich-text editor defaults */
+#minutes-rich-editor p {
+  margin-bottom: 1rem;
+  line-height: 1.7;
+}
+#minutes-rich-editor ul, #minutes-rich-editor ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+#minutes-rich-editor ul {
+  list-style-type: disc;
+}
+#minutes-rich-editor ol {
+  list-style-type: decimal;
+}
+#minutes-rich-editor li {
+  margin-bottom: 0.5rem;
+}
+#minutes-rich-editor h3 {
+  font-family: 'Fira Code', monospace;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+  color: #121212;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  padding-bottom: 0.5rem;
+}
+#minutes-rich-editor h3:first-child {
+  margin-top: 0;
+}
