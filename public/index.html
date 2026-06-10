@@ -260,6 +260,25 @@
                   </select>
                 </div>
 
+                <!-- Auto Cutoff & VAD Settings -->
+                <div class="w-full text-left space-y-2 border-t border-slate-100 pt-2 mt-1">
+                  <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block">Auto Cutoff & VAD</span>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <label class="flex items-center gap-1.5 text-xs text-slate-650 cursor-pointer select-none">
+                      <input type="checkbox" id="chk-auto-cutoff-silence" checked class="w-3.5 h-3.5 rounded border-slate-350 bg-white text-[#3E6AE1] focus:ring-[#3E6AE1]/20">
+                      Hening (2 detik)
+                    </label>
+                    <label class="flex items-center gap-1.5 text-xs text-slate-650 cursor-pointer select-none">
+                      <input type="checkbox" id="chk-auto-cutoff-time" checked class="w-3.5 h-3.5 rounded border-slate-350 bg-white text-[#3E6AE1] focus:ring-[#3E6AE1]/20">
+                      Tiap 30 detik
+                    </label>
+                  </div>
+                  <label class="flex items-center gap-1.5 text-xs text-slate-550 cursor-pointer select-none">
+                    <input type="checkbox" id="chk-filter-silence-stream" checked class="w-3.5 h-3.5 rounded border-slate-350 bg-white text-[#3E6AE1] focus:ring-[#3E6AE1]/20">
+                    Saring hening (tidak kirim ke Gemini)
+                  </label>
+                </div>
+
                 <!-- Live Speaker Switcher (Hidden when not recording) -->
                 <div id="live-speaker-container" class="hidden w-full text-left space-y-2 border-t border-slate-200 pt-3 mt-1">
                   <label class="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-1.5">Pembicara Aktif (Klik/Hotkey 1-9 untuk ganti + Cut Off)</label>

@@ -24,6 +24,13 @@ let liveTranscriptActive = '';
 let liveTranscriptOffset = '';
 let liveAudioVisualizerId = null;
 
+// VAD and Auto Cutoff variables
+let silenceThreshold = 0.015; // default volume threshold
+let silenceDurationLimit = 2000; // 2 seconds silence limit
+let lastActiveTime = 0;
+let lastCutOffTime = 0;
+let isSilenceActive = true;
+
 // WebSocket auto-reconnect variables
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -129,6 +136,16 @@ const toastMessage = document.getElementById('toast-message');
 const toastIconWrapper = document.getElementById('toast-icon-wrapper');
 
 // --- Helper Functions ---
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // Clean Gemini cumulative transcript from already cut off prefix
 function getCleanTextChunk(textChunk, offset) {
@@ -393,8 +410,8 @@ function renderParticipantsPanel(participants) {
           ${initials}
         </div>
         <div class="flex-grow min-w-0">
-          <p class="text-sm font-semibold text-[#393C41] truncate">${p.name}</p>
-          <p class="text-[10px] text-slate-500 truncate">${[p.position, p.unit].filter(Boolean).join(' · ') || 'Tidak ada jabatan'}</p>
+          <p class="text-sm font-semibold text-[#393C41] truncate">${escapeHtml(p.name)}</p>
+          <p class="text-[10px] text-slate-500 truncate">${[escapeHtml(p.position), escapeHtml(p.unit)].filter(Boolean).join(' · ') || 'Tidak ada jabatan'}</p>
         </div>
         <button onclick="removeParticipant('${sessionId}', '${p.id}')"
           class="opacity-0 group-hover:opacity-100 p-1.5 text-slate-650 hover:text-red-600 hover:bg-red-50 rounded-[4px] transition-all cursor-pointer flex-shrink-0"
@@ -419,9 +436,7 @@ window.removeParticipant = async function(sessionId, participantId) {
       renderParticipantsPanel(state.currentSession.participants);
       // Also refresh speaker dropdown if recording
       if (state.recording.isRecording) {
-        selectLiveSpeaker.innerHTML = state.currentSession.participants.map(
-          (p, idx) => `<option value="${p.name}">[${idx + 1}] ${p.name}</option>`
-        ).join('');
+        renderLiveSpeakerPills();
       }
       showToast('Peserta berhasil dihapus dari rapat.');
     } else {
@@ -482,7 +497,7 @@ function renderTranscripts(transcripts) {
             </div>
             <span class="text-[10px] text-slate-500 font-mono">${t.timestamp || ''}</span>
           </div>
-          <p class="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">${t.text}</p>
+          <p contenteditable="true" onblur="updateTranscriptText('${t.id}', this.innerText)" class="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap focus:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-[#3E6AE1]/20 rounded p-1 transition-all">${t.text}</p>
         </div>
       </div>
     `;
@@ -549,6 +564,26 @@ window.updateSpeaker = async function(transcriptId, val) {
     }
   } catch (err) {
     showToast('Gagal merubah label pembicara.', 'error');
+  }
+};
+
+// Update Transcript Text Chunk Manually
+window.updateTranscriptText = async function(transcriptId, val) {
+  try {
+    const res = await fetch(`/api/transcripts/${transcriptId}/text`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: val })
+    });
+    const data = await res.json();
+    if (data.success) {
+      // Update local state transcript text
+      const item = state.currentSession.transcripts.find(t => t.id === transcriptId);
+      if (item) item.text = val;
+      showToast('Transkrip berhasil diperbarui.');
+    }
+  } catch (err) {
+    showToast('Gagal merubah teks transkrip.', 'error');
   }
 };
 
@@ -740,6 +775,27 @@ async function saveLiveTranscript(text, speakerLabel = '') {
   }
 }
 
+async function triggerSilenceCutOff() {
+  const textToSave = liveTranscriptAccumulated.trim();
+  const speaker = document.getElementById('select-live-speaker').value || '';
+
+  if (!textToSave) return;
+
+  // Add the saved text to the offset so it gets removed from the cumulative Gemini transcript
+  liveTranscriptOffset += (liveTranscriptOffset ? " " : "") + textToSave;
+
+  // Reset segment state so next transcript starts fresh
+  liveTranscriptAccumulated = '';
+  liveTranscriptCommitted = '';
+  liveTranscriptActive = '';
+
+  const liveTextEl = document.getElementById('live-transcript-text');
+  if (liveTextEl) liveTextEl.textContent = '';
+
+  lastCutOffTime = Date.now();
+  await saveLiveTranscript(textToSave, speaker);
+}
+
 async function startRecording() {
   if (state.recording.isRecording) return;
 
@@ -748,6 +804,10 @@ async function startRecording() {
   liveTranscriptCommitted = '';
   liveTranscriptActive = '';
   liveTranscriptOffset = '';
+
+  lastActiveTime = Date.now();
+  lastCutOffTime = Date.now();
+  isSilenceActive = true;
 
   // Populate and show the speaker pills
   renderLiveSpeakerPills();
@@ -843,6 +903,52 @@ function setupWebSocketConnection(wsUrl) {
         if (!state.recording.isRecording) return;
         
         const inputData = e.inputBuffer.getChannelData(0);
+
+        // Calculate RMS to detect silence volume
+        let sum = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sum / inputData.length);
+
+        // Get VAD and Auto Cutoff settings from DOM
+        const chkFilterSilence = document.getElementById('chk-filter-silence-stream');
+        const chkAutoSilence = document.getElementById('chk-auto-cutoff-silence');
+        const chkAutoTime = document.getElementById('chk-auto-cutoff-time');
+
+        const filterSilence = chkFilterSilence ? chkFilterSilence.checked : true;
+        const autoSilence = chkAutoSilence ? chkAutoSilence.checked : true;
+        const autoTime = chkAutoTime ? chkAutoTime.checked : true;
+
+        if (rms < silenceThreshold) {
+          // Silence detected
+          if (autoSilence) {
+            const timeSinceActive = Date.now() - lastActiveTime;
+            // If silence duration limit has passed (2 seconds) and there is text to save, trigger automatic cutoff
+            if (timeSinceActive > silenceDurationLimit && liveTranscriptAccumulated.trim() && !isSilenceActive) {
+              isSilenceActive = true;
+              triggerSilenceCutOff();
+            }
+          }
+
+          if (filterSilence) {
+            // Do not send silence to Gemini Live WebSocket
+            return;
+          }
+        } else {
+          // Speech detected!
+          lastActiveTime = Date.now();
+          isSilenceActive = false;
+        }
+
+        // Periodic Auto Cutoff (every 30 seconds)
+        if (autoTime) {
+          const timeSinceCutoff = Date.now() - lastCutOffTime;
+          if (timeSinceCutoff > 30000 && liveTranscriptAccumulated.trim()) {
+            triggerSilenceCutOff();
+          }
+        }
+
         const pcmBuffer = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           let val = Math.floor(inputData[i] * 0x7FFF);
@@ -1135,23 +1241,7 @@ btnRecordMic.addEventListener('click', () => {
 
 // Cut Off: save current accumulated transcript under selected speaker and reset segment
 btnCutOff.addEventListener('click', async () => {
-  const textToSave = liveTranscriptAccumulated.trim();
-  const speaker = document.getElementById('select-live-speaker').value || '';
-
-  if (!textToSave) {
-    return;
-  }
-
-  // Add the saved text to the offset so it gets removed from the cumulative Gemini transcript
-  liveTranscriptOffset += (liveTranscriptOffset ? " " : "") + textToSave;
-
-  // Reset state segmen agar transkrip berikutnya mulai dari kosong
-  liveTranscriptAccumulated = '';
-  liveTranscriptCommitted = '';
-  liveTranscriptActive = '';
-
-  // Simpan ke DB
-  await saveLiveTranscript(textToSave, speaker);
+  await triggerSilenceCutOff();
 });
 
 // Generate Minutes Handler
@@ -1393,15 +1483,24 @@ window.renderLiveSpeakerPills = function() {
 
   if (participants.length > 0) {
     pillsContainer.innerHTML = participants.map((p, idx) => {
-      const escapedName = p.name.replace(/'/g, "\\'");
       return `
-        <button type="button" onclick="setActiveSpeakerAndCutOff('${escapedName}')" 
-          id="speaker-pill-${p.name.replace(/\s+/g, '_')}"
+        <button type="button" 
+          data-speaker="${encodeURIComponent(p.name)}"
+          id="speaker-pill-${idx}"
           class="speaker-pill px-3 py-1.5 border border-slate-200 bg-white text-xs font-semibold text-slate-600 rounded-[4px] hover:bg-slate-50 cursor-pointer">
-          <span class="text-[#3E6AE1] font-mono mr-1">[${idx + 1}]</span> ${p.name}
+          <span class="text-[#3E6AE1] font-mono mr-1">[${idx + 1}]</span> ${escapeHtml(p.name)}
         </button>
       `;
     }).join('');
+    
+    // Add event listeners programmatically to bypass HTML escaping/quoting issues
+    const pills = pillsContainer.querySelectorAll('.speaker-pill');
+    pills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        const name = decodeURIComponent(pill.getAttribute('data-speaker'));
+        setActiveSpeakerAndCutOff(name);
+      });
+    });
     
     // Set active speaker if not set or if current active is no longer in participants
     const activeSpeakerInput = document.getElementById('select-live-speaker');
@@ -1427,13 +1526,13 @@ window.setActiveSpeaker = function(speakerName) {
   pills.forEach(p => {
     p.classList.remove('active', 'border-[#3E6AE1]/30', 'bg-blue-50/50', 'text-[#3E6AE1]');
     p.classList.add('border-slate-200', 'bg-white', 'text-slate-600');
+    
+    const pillSpeaker = decodeURIComponent(p.getAttribute('data-speaker') || '');
+    if (pillSpeaker === speakerName) {
+      p.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
+      p.classList.add('active', 'border-[#3E6AE1]/30', 'bg-blue-50/50', 'text-[#3E6AE1]');
+    }
   });
-  
-  const activePill = document.getElementById(`speaker-pill-${speakerName.replace(/\s+/g, '_')}`);
-  if (activePill) {
-    activePill.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
-    activePill.classList.add('active', 'border-[#3E6AE1]/30', 'bg-blue-50/50', 'text-[#3E6AE1]');
-  }
 };
 
 window.setActiveSpeakerAndCutOff = async function(speakerName) {

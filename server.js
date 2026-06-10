@@ -883,6 +883,17 @@ app.put('/api/transcripts/:id/speaker', requireAuth, async (req, res) => {
   }
 });
 
+// 6b. Update transcript text chunk manually
+app.put('/api/transcripts/:id/text', requireAuth, async (req, res) => {
+  const { text } = req.body;
+  try {
+    await db.updateTranscriptText(req.params.id, text || '');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 6a. Update action item status
 app.put('/api/action-items/:id/status', requireAuth, async (req, res) => {
   const { status } = req.body;
@@ -1277,8 +1288,9 @@ wss.on('connection', async (ws, request) => {
         responseModalities: ['AUDIO'],
         inputAudioTranscription: {},
         systemInstruction: `Anda adalah RunguAksara, asisten pencatat transkrip dan notulensi rapat real-time.
-Tugas utama Anda adalah menyimak data audio yang masuk secara real-time dan menuliskan kembali teks transkrip kata-demi-kata (speech-to-text) dalam Bahasa Indonesia yang formal dan mudah dibaca.
-Jangan menambahkan komentar/penjelasan sendiri di luar transkrip pembicaraan rapat.`,
+Tugas utama Anda adalah menyimak data audio yang masuk secara real-time dan menuliskan kembali teks transkrip kata-demi-kata (speech-to-text) HANYA dalam Bahasa Indonesia yang formal dan mudah dibaca.
+KUNCI TRANSKRIPSI KE BAHASA INDONESIA SAJA. Jika pembicara berbicara dalam bahasa asing atau bahasa daerah, segera terjemahkan atau transkripsikan langsung ke Bahasa Indonesia.
+JANGAN PERNAH MENJAWAB, MERESPONS, ATAU MENANGGAPI pembicaraan rapat. Tugas Anda murni hanya melakukan transkripsi (speech-to-text). Jangan menghasilkan model turn, teks tanggapan, atau suara balasan apapun.`,
       },
       callbacks: {
         onopen: () => {
@@ -1304,6 +1316,11 @@ Jangan menambahkan komentar/penjelasan sendiri di luar transkrip pembicaraan rap
         onclose: (ev) => {
           console.log('Gemini Live API WebSocket closed:', ev);
           ws.send(JSON.stringify({ type: 'status', status: 'disconnected', message: 'Koneksi Gemini ditutup' }));
+          try {
+            ws.close();
+          } catch (e) {
+            console.error('Error closing client WebSocket:', e.message);
+          }
         },
         onerror: (err) => {
           console.error('Gemini Live API WebSocket error:', err);

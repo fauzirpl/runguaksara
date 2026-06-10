@@ -292,6 +292,19 @@ export const db = {
     return true;
   },
 
+  async updateTranscriptText(id, text) {
+    if (dbType === 'json') {
+      const transcript = jsonDb.transcripts.find(t => t.id === id);
+      if (transcript) {
+        transcript.text = text;
+        saveJsonDb();
+      }
+      return transcript;
+    }
+    await mysqlPool.query('UPDATE transcripts SET text = ? WHERE id = ?', [text, id]);
+    return true;
+  },
+
   // --- Minutes (Notulensi) & Action Items ---
   async getMinutes(sessionId) {
     if (dbType === 'json') {
