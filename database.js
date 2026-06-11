@@ -48,6 +48,40 @@ export function initDatabase() {
 
       await createTables(resolve);
     } catch (err) {
+      if (err.code === 'ER_BAD_DB_ERROR') {
+        console.log(`Database '${database}' does not exist. Attempting to create it...`);
+        try {
+          const tempConn = await mysql.createConnection({
+            host: host,
+            port: parseInt(process.env.DB_PORT || '3306'),
+            user: user,
+            password: process.env.DB_PASSWORD || ''
+          });
+          await tempConn.query(`CREATE DATABASE IF NOT EXISTS \`${database}\``);
+          await tempConn.end();
+          console.log(`Database '${database}' created successfully.`);
+
+          // Re-establish the connection pool
+          mysqlPool = mysql.createPool({
+            host: host,
+            port: parseInt(process.env.DB_PORT || '3306'),
+            user: user,
+            password: process.env.DB_PASSWORD || '',
+            database: database,
+            waitForConnections: true,
+            connectionLimit: 10,
+            queueLimit: 0
+          });
+          const connection = await mysqlPool.getConnection();
+          console.log('MySQL database connection established successfully after creation.');
+          connection.release();
+
+          await createTables(resolve);
+          return;
+        } catch (createErr) {
+          console.error(`Failed to automatically create database '${database}':`, createErr.message);
+        }
+      }
       console.warn('MySQL connection failed, falling back to JSON database:', err.message);
       useJsonFallback(resolve);
     }
@@ -302,6 +336,16 @@ export const db = {
       return transcript;
     }
     await mysqlPool.query('UPDATE transcripts SET text = ? WHERE id = ?', [text, id]);
+    return true;
+  },
+
+  async deleteTranscript(id) {
+    if (dbType === 'json') {
+      jsonDb.transcripts = jsonDb.transcripts.filter(t => t.id !== id);
+      saveJsonDb();
+      return true;
+    }
+    await mysqlPool.query('DELETE FROM transcripts WHERE id = ?', [id]);
     return true;
   },
 

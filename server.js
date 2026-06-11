@@ -1,3 +1,4 @@
+// Server entry point - force reload to read updated .env variables
 import express from 'express';
 import multer from 'multer';
 import dotenv from 'dotenv';
@@ -403,6 +404,35 @@ function mockTranscription() {
     "Baik Pak, akan segera kami tindaklanjuti seluruh poin penting hari ini agar terdokumentasi dengan baik."
   ];
   return samples.join(' ');
+}
+
+async function translateAndCorrectToIndonesian(text) {
+  const geminiKey = process.env.GEMINI_API_KEY?.replace(/^["']|["']$/g, '');
+  if (!geminiKey || !text || !text.trim()) return text;
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: geminiKey });
+    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+    const systemPrompt = `Anda adalah asisten penerjemah dan penyelaras transkrip rapat profesional untuk RunguAksara.
+Tugas Anda adalah memproses teks transkrip suara berikut:
+1. Jika teks transkrip tertulis dalam bahasa asing (seperti Inggris, Jepang, dll.) atau bahasa daerah, terjemahkan secara utuh dan akurat ke dalam Bahasa Indonesia yang formal dan santun.
+2. Jika teks transkrip sudah dalam Bahasa Indonesia, cukup perbaiki ejaan, tata bahasa, kata yang salah tangkap (typo) minor agar menjadi kalimat yang padu dan mudah dibaca tanpa mengubah maksud pembicara.
+3. Hanya kembalikan teks hasil akhir penerjemahan/perbaikan tersebut. Jangan menambahkan penjelasan, kata pengantar, penutup, atau membungkusnya dalam tanda kutip.`;
+
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: `${systemPrompt}\n\nTeks transkrip:\n"${text}"`
+    });
+
+    const resultText = response.text?.trim();
+    if (resultText) {
+      return resultText;
+    }
+  } catch (err) {
+    console.error('Translation/Correction helper failure:', err.message);
+  }
+  return text;
 }
 
 // --- LLM Notulensi Helper ---
@@ -840,6 +870,7 @@ app.post('/api/sessions/:id/transcribe', requireAuth, upload.single('audio'), as
 
     console.log(`Processing audio transcription for session: ${session.title}...`);
     const transcriptionText = await transcribeAudio(audioPath);
+    const correctedText = await translateAndCorrectToIndonesian(transcriptionText);
 
     // Split text into readable segment paragraphs as transcripts
     const existingTranscripts = await db.getTranscripts(sessionId);
@@ -849,7 +880,7 @@ app.post('/api/sessions/:id/transcribe', requireAuth, upload.single('audio'), as
       id: crypto.randomUUID(),
       session_id: sessionId,
       chunk_index: chunkIndex,
-      text: transcriptionText,
+      text: correctedText,
       timestamp: new Date().toLocaleTimeString('id-ID'),
       speaker_label: '' // Label pembicara kosong di awal
     };
@@ -888,6 +919,16 @@ app.put('/api/transcripts/:id/text', requireAuth, async (req, res) => {
   const { text } = req.body;
   try {
     await db.updateTranscriptText(req.params.id, text || '');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6c. Delete transcript chunk
+app.delete('/api/transcripts/:id', requireAuth, async (req, res) => {
+  try {
+    await db.deleteTranscript(req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1035,166 +1076,282 @@ app.get('/api/sessions/:id/export', requireAuth, async (req, res) => {
     const actionItems = await db.getActionItems(minutes.id);
     const data = JSON.parse(minutes.content_json);
 
-    // Build professional document using docx.js library
+    // Styled cell helper to reduce boilerplate, apply standard fonts, padding, and backgrounds
+    function createStyledCell({ text, bold = false, size = 20, color = "334155", fill = null, widthPercent, align = AlignmentType.LEFT }) {
+      const cellOptions = {
+        width: { size: widthPercent, type: WidthType.PERCENTAGE },
+        margins: { top: 120, bottom: 120, left: 150, right: 150 },
+        children: [
+          new Paragraph({
+            alignment: align,
+            spacing: { before: 40, after: 40 },
+            children: [
+              new TextRun({
+                text,
+                bold,
+                size,
+                color,
+                font: bold ? "Arial" : "Calibri"
+              })
+            ]
+          })
+        ]
+      };
+      
+      if (fill) {
+        cellOptions.shading = {
+          fill: fill
+        };
+      }
+      
+      return new TableCell(cellOptions);
+    }
+
+    // Build professional document using docx.js library matching PUPR-BPIW administrative guidelines
     const doc = new Document({
       sections: [{
-        properties: {},
+        properties: {
+          page: {
+            margin: {
+              top: 1700,      // ~3cm (3/2.54 * 1440 = 1700 twips)
+              bottom: 1134,   // ~2cm
+              left: 1700,     // ~3cm
+              right: 1134     // ~2cm
+            }
+          }
+        },
         children: [
-          // Header / Kop Surat RunguAksara
+          // Kop Surat RunguAksara Branding
           new Paragraph({
             alignment: AlignmentType.CENTER,
             children: [
-              new TextRun({ text: "RUNGUAKSARA", bold: true, size: 26, font: "Lexend" }),
+              new TextRun({ text: "RUNGUAKSARA", bold: true, size: 28, font: "Arial", color: "1A365D" }),
             ]
           }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
             children: [
-              new TextRun({ text: "Transkrip & Notulensi Rapat Otomatis", size: 16, font: "Source Sans 3" }),
-            ]
+              new TextRun({ text: "Sistem Dokumentasi, Transkripsi & Notulensi Rapat Otomatis", size: 16, font: "Arial", color: "475569" }),
+            ],
+            border: {
+              bottom: {
+                style: BorderStyle.SINGLE,
+                size: 12, // 1.5 pt
+                color: "1A365D",
+                space: 10
+              }
+            },
+            spacing: { after: 300 }
           }),
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ text: "__________________________________________________________________________", bold: true }),
-            ]
-          }),
-          new Paragraph({ text: "", spacing: { after: 200 } }),
 
           // Document Title
           new Paragraph({
             alignment: AlignmentType.CENTER,
             children: [
-              new TextRun({ text: "NOTULENSI RAPAT", bold: true, size: 28, font: "Lexend" }),
+              new TextRun({ text: "NOTULENSI RAPAT", bold: true, size: 28, font: "Arial", color: "1A365D" }),
             ],
-            spacing: { after: 300 }
+            spacing: { before: 200, after: 300 }
           }),
 
-          // Metadata Table
+          // Section A: METADATA RAPAT
           new Paragraph({
             children: [
-              new TextRun({ text: "I. METADATA RAPAT", bold: true, size: 22, font: "Lexend" })
+              new TextRun({ text: "A. METADATA RAPAT", bold: true, size: 22, font: "Arial", color: "1A365D" })
             ],
-            spacing: { after: 120 }
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: `Judul Rapat : ${session.title}\n`, font: "Source Sans 3" }),
-              new TextRun({ text: `Tanggal      : ${session.date}\n`, font: "Source Sans 3" }),
-              new TextRun({ text: `Lokasi       : ${session.location || '-'}\n`, font: "Source Sans 3" }),
-              new TextRun({ text: `Agenda       : ${session.agenda || '-'}\n`, font: "Source Sans 3" }),
-            ],
-            spacing: { after: 300 }
+            spacing: { before: 200, after: 120 }
           }),
 
-          // Participants
-          new Paragraph({
-            children: [
-              new TextRun({ text: "II. DAFTAR HADIR PESERTA", bold: true, size: 22, font: "Lexend" })
-            ],
-            spacing: { after: 120 }
-          }),
-          ...participants.map((p, idx) => new Paragraph({
-            children: [
-              new TextRun({ text: `${idx + 1}. ${p.name} - ${p.position || 'Staf'} (${p.unit || 'Internal'})`, font: "Source Sans 3" })
-            ]
-          })),
-          new Paragraph({ text: "", spacing: { after: 300 } }),
-
-          // Summary
-          new Paragraph({
-            children: [
-              new TextRun({ text: "III. RINGKASAN JALANNYA RAPAT", bold: true, size: 22, font: "Lexend" })
-            ],
-            spacing: { after: 120 }
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: data.summary, font: "Source Sans 3" })
-            ],
-            spacing: { after: 300 }
-          }),
-
-          // Discussion Points
-          new Paragraph({
-            children: [
-              new TextRun({ text: "IV. POIN-POIN PEMBAHASAN RAPAT", bold: true, size: 22, font: "Lexend" })
-            ],
-            spacing: { after: 120 }
-          }),
-          ...data.discussion_points.map((pt, idx) => new Paragraph({
-            children: [
-              new TextRun({ text: `•  ${pt}`, font: "Source Sans 3" })
-            ],
-            spacing: { after: 80 }
-          })),
-          new Paragraph({ text: "", spacing: { after: 300 } }),
-
-          // Decisions
-          new Paragraph({
-            children: [
-              new TextRun({ text: "V. KEPUTUSAN RAPAT", bold: true, size: 22, font: "Lexend" })
-            ],
-            spacing: { after: 120 }
-          }),
-          ...data.decisions.map((dec, idx) => new Paragraph({
-            children: [
-              new TextRun({ text: `${idx + 1}. ${dec}`, font: "Source Sans 3" })
-            ],
-            spacing: { after: 80 }
-          })),
-          new Paragraph({ text: "", spacing: { after: 300 } }),
-
-          // Action Items
-          new Paragraph({
-            children: [
-              new TextRun({ text: "VI. TINDAK LANJUT / ACTION ITEMS", bold: true, size: 22, font: "Lexend" })
-            ],
-            spacing: { after: 120 }
-          }),
+          // Clean, aligned metadata block using a borderless table
           new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.NONE },
+              bottom: { style: BorderStyle.NONE },
+              left: { style: BorderStyle.NONE },
+              right: { style: BorderStyle.NONE },
+              insideHorizontal: { style: BorderStyle.NONE },
+              insideVertical: { style: BorderStyle.NONE }
+            },
             rows: [
               new TableRow({
                 children: [
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Tugas / Deskripsi", bold: true, font: "Lexend" })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "PIC / Penanggung Jawab", bold: true, font: "Lexend" })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Tenggat Waktu", bold: true, font: "Lexend" })] })] }),
+                  new TableCell({
+                    width: { size: 20, type: WidthType.PERCENTAGE },
+                    margins: { top: 60, bottom: 60, left: 0, right: 100 },
+                    children: [new Paragraph({ children: [new TextRun({ text: "Judul Rapat", bold: true, font: "Arial", size: 20 })] })]
+                  }),
+                  new TableCell({
+                    width: { size: 80, type: WidthType.PERCENTAGE },
+                    margins: { top: 60, bottom: 60, left: 0, right: 0 },
+                    children: [new Paragraph({ children: [new TextRun({ text: `: ${session.title}`, font: "Calibri", size: 20 })] })]
+                  })
                 ]
               }),
-              ...actionItems.map(item => new TableRow({
+              new TableRow({
                 children: [
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.description, font: "Source Sans 3" })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.pic, font: "Source Sans 3" })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.due_date, font: "Source Sans 3" })] })] }),
+                  new TableCell({
+                    width: { size: 20, type: WidthType.PERCENTAGE },
+                    margins: { top: 60, bottom: 60, left: 0, right: 100 },
+                    children: [new Paragraph({ children: [new TextRun({ text: "Hari, Tanggal", bold: true, font: "Arial", size: 20 })] })]
+                  }),
+                  new TableCell({
+                    width: { size: 80, type: WidthType.PERCENTAGE },
+                    margins: { top: 60, bottom: 60, left: 0, right: 0 },
+                    children: [new Paragraph({ children: [new TextRun({ text: `: ${session.date}`, font: "Calibri", size: 20 })] })]
+                  })
                 ]
-              }))
+              }),
+              new TableRow({
+                children: [
+                  new TableCell({
+                    width: { size: 20, type: WidthType.PERCENTAGE },
+                    margins: { top: 60, bottom: 60, left: 0, right: 100 },
+                    children: [new Paragraph({ children: [new TextRun({ text: "Tempat / Media", bold: true, font: "Arial", size: 20 })] })]
+                  }),
+                  new TableCell({
+                    width: { size: 80, type: WidthType.PERCENTAGE },
+                    margins: { top: 60, bottom: 60, left: 0, right: 0 },
+                    children: [new Paragraph({ children: [new TextRun({ text: `: ${session.location || '-'}`, font: "Calibri", size: 20 })] })]
+                  })
+                ]
+              }),
+              new TableRow({
+                children: [
+                  new TableCell({
+                    width: { size: 20, type: WidthType.PERCENTAGE },
+                    margins: { top: 60, bottom: 60, left: 0, right: 100 },
+                    children: [new Paragraph({ children: [new TextRun({ text: "Agenda Rapat", bold: true, font: "Arial", size: 20 })] })]
+                  }),
+                  new TableCell({
+                    width: { size: 80, type: WidthType.PERCENTAGE },
+                    margins: { top: 60, bottom: 60, left: 0, right: 0 },
+                    children: [new Paragraph({ children: [new TextRun({ text: `: ${session.agenda || '-'}`, font: "Calibri", size: 20 })] })]
+                  })
+                ]
+              })
             ]
           }),
-          // Transcript Section
-          new Paragraph({ text: "", spacing: { after: 300 } }),
+          new Paragraph({ text: "", spacing: { after: 200 } }),
+
+          // Section B: DAFTAR HADIR PESERTA
           new Paragraph({
             children: [
-              new TextRun({ text: "VII. TRANSKRIPSI RAPAT", bold: true, size: 22, font: "Lexend" })
+              new TextRun({ text: "B. DAFTAR HADIR PESERTA", bold: true, size: 22, font: "Arial", color: "1A365D" })
             ],
-            spacing: { after: 120 }
+            spacing: { before: 200, after: 120 }
           }),
-          ...transcripts.flatMap(t => {
-            const speaker = t.speaker_label ? t.speaker_label : "Pembicara";
-            return [
-              new Paragraph({
+          ...participants.map((p, idx) => new Paragraph({
+            children: [
+              new TextRun({ text: `${idx + 1}.  ${p.name}`, bold: true, font: "Arial", size: 20 }),
+              new TextRun({ text: ` - ${p.position || 'Staf'} (${p.unit || 'Internal'})`, font: "Calibri", size: 20 })
+            ],
+            spacing: { after: 60 }
+          })),
+          ...(participants.length === 0 ? [new Paragraph({ children: [new TextRun({ text: "- Tidak ada peserta terdaftar -", font: "Calibri", size: 20, italic: true })] })] : []),
+          new Paragraph({ text: "", spacing: { after: 200 } }),
+
+          // Section C: RINGKASAN JALANNYA RAPAT
+          new Paragraph({
+            children: [
+              new TextRun({ text: "C. RINGKASAN JALANNYA RAPAT", bold: true, size: 22, font: "Arial", color: "1A365D" })
+            ],
+            spacing: { before: 200, after: 120 }
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: data.summary, font: "Calibri", size: 20 })
+            ],
+            spacing: { after: 200, line: 276, lineRule: "auto" } // 1.15 line spacing
+          }),
+
+          // Section D: POIN-POIN PEMBAHASAN RAPAT
+          new Paragraph({
+            children: [
+              new TextRun({ text: "D. POIN-POIN PEMBAHASAN RAPAT", bold: true, size: 22, font: "Arial", color: "1A365D" })
+            ],
+            spacing: { before: 200, after: 120 }
+          }),
+          ...data.discussion_points.map((pt) => new Paragraph({
+            children: [
+              new TextRun({ text: "•  ", bold: true, font: "Arial", size: 20, color: "1A365D" }),
+              new TextRun({ text: pt, font: "Calibri", size: 20 })
+            ],
+            spacing: { after: 80, line: 276, lineRule: "auto" }
+          })),
+          new Paragraph({ text: "", spacing: { after: 200 } }),
+
+          // Section E: KEPUTUSAN RAPAT
+          new Paragraph({
+            children: [
+              new TextRun({ text: "E. KEPUTUSAN RAPAT", bold: true, size: 22, font: "Arial", color: "1A365D" })
+            ],
+            spacing: { before: 200, after: 120 }
+          }),
+          ...data.decisions.map((dec, idx) => new Paragraph({
+            children: [
+              new TextRun({ text: `${idx + 1}.  `, bold: true, font: "Arial", size: 20, color: "1A365D" }),
+              new TextRun({ text: dec, font: "Calibri", size: 20 })
+            ],
+            spacing: { after: 80, line: 276, lineRule: "auto" }
+          })),
+          new Paragraph({ text: "", spacing: { after: 200 } }),
+
+          // Section F: TINDAK LANJUT / ACTION ITEMS
+          new Paragraph({
+            children: [
+              new TextRun({ text: "F. TINDAK LANJUT / ACTION ITEMS", bold: true, size: 22, font: "Arial", color: "1A365D" })
+            ],
+            spacing: { before: 200, after: 120 }
+          }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" },
+              bottom: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" },
+              left: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" },
+              right: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" },
+              insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" },
+              insideVertical: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" }
+            },
+            rows: [
+              new TableRow({
                 children: [
-                  new TextRun({ text: `${speaker} (${t.timestamp || ''})`, bold: true, font: "Lexend", size: 20 }),
-                ],
-                spacing: { before: 120, after: 60 }
+                  createStyledCell({ text: "Tindak Lanjut / Deskripsi Tugas", bold: true, size: 20, color: "FFFFFF", fill: "1A365D", widthPercent: 55 }),
+                  createStyledCell({ text: "PIC / Penanggung Jawab", bold: true, size: 20, color: "FFFFFF", fill: "1A365D", widthPercent: 25 }),
+                  createStyledCell({ text: "Tenggat Waktu", bold: true, size: 20, color: "FFFFFF", fill: "1A365D", widthPercent: 20 })
+                ]
               }),
-              new Paragraph({
-                children: [
-                  new TextRun({ text: t.text, font: "Source Sans 3", size: 20 }),
-                ],
-                spacing: { after: 120 }
+              ...actionItems.map((item, idx) => {
+                const bgFill = idx % 2 === 0 ? "F8FAFC" : "FFFFFF"; // zebra striping
+                return new TableRow({
+                  children: [
+                    createStyledCell({ text: item.description, size: 20, fill: bgFill, widthPercent: 55 }),
+                    createStyledCell({ text: item.pic || '-', bold: true, size: 20, color: "1A365D", fill: bgFill, widthPercent: 25 }),
+                    createStyledCell({ text: item.due_date || '-', size: 20, fill: bgFill, widthPercent: 20 })
+                  ]
+                });
               })
-            ];
+            ]
+          }),
+          new Paragraph({ text: "", spacing: { after: 200 } }),
+
+          // Section G: TRANSKRIPSI RAPAT
+          new Paragraph({
+            children: [
+              new TextRun({ text: "G. TRANSKRIPSI RAPAT", bold: true, size: 22, font: "Arial", color: "1A365D" })
+            ],
+            spacing: { before: 200, after: 120 }
+          }),
+          ...transcripts.map(t => {
+            const speaker = t.speaker_label || "Pembicara";
+            return new Paragraph({
+              children: [
+                new TextRun({ text: `[${t.timestamp || ''}] `, font: "Consolas", size: 18, color: "64748B" }),
+                new TextRun({ text: `${speaker}: `, bold: true, font: "Arial", size: 20, color: "1A365D" }),
+                new TextRun({ text: t.text, font: "Calibri", size: 20 })
+              ],
+              spacing: { before: 80, after: 80, line: 240 } // 1.0 line spacing for transcripts to look compact
+            });
           })
         ]
       }]
@@ -1229,11 +1386,13 @@ app.post('/api/sessions/:id/live-transcript', requireAuth, async (req, res) => {
     const existingTranscripts = await db.getTranscripts(sessionId);
     const chunkIndex = existingTranscripts.length;
 
+    const correctedText = await translateAndCorrectToIndonesian(text);
+
     const newTranscript = {
       id: crypto.randomUUID(),
       session_id: sessionId,
       chunk_index: chunkIndex,
-      text: text.trim(),
+      text: correctedText,
       timestamp: new Date().toLocaleTimeString('id-ID'),
       speaker_label: speaker_label || ''
     };

@@ -25,7 +25,7 @@ let liveTranscriptOffset = '';
 let liveAudioVisualizerId = null;
 
 // VAD and Auto Cutoff variables
-let silenceThreshold = 0.015; // default volume threshold
+let silenceThreshold = 0.003; // default volume threshold
 let silenceDurationLimit = 2000; // 2 seconds silence limit
 let lastActiveTime = 0;
 let lastCutOffTime = 0;
@@ -479,9 +479,7 @@ function renderTranscripts(transcripts) {
     const colors = ['from-cyan-500 to-blue-500', 'from-emerald-500 to-teal-500', 'from-violet-500 to-purple-500',
       'from-amber-500 to-orange-500', 'from-pink-500 to-rose-500', 'from-indigo-500 to-cyan-500'];
     const avatarColor = colors[Math.abs(speaker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % colors.length];
-
-    return `
-      <div class="flex items-start gap-4 p-4 rounded-[8px] chat-bubble-left transition-all duration-200 hover:border-slate-350">
+    return `      <div class="flex items-start gap-4 p-4 rounded-[8px] chat-bubble-left transition-all duration-200 hover:border-slate-350 group">
         <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gradient-to-br ${avatarColor} flex items-center justify-center text-white text-xs font-bold shadow-md">
           ${initials}
         </div>
@@ -490,12 +488,19 @@ function renderTranscripts(transcripts) {
             <div class="flex items-center gap-2">
               <span class="text-sm font-semibold text-[#393C41]">${speaker}</span>
               <!-- Speaker correction dropdown -->
-              <select onchange="updateSpeaker('${t.id}', this.value)" class="bg-white border border-slate-200 text-slate-600 hover:text-[#393C41] rounded-[4px] text-[10px] px-2 py-0.5 focus:outline-none focus:border-[#3E6AE1] focus:ring-2 focus:ring-[#3E6AE1]/10 transition-colors cursor-pointer">
+              <select onchange="updateSpeaker('${t.id}', this.value)" class="bg-white border border-slate-200 text-slate-650 hover:text-[#393C41] rounded-[4px] text-[10px] px-2 py-0.5 focus:outline-none focus:border-[#3E6AE1] focus:ring-2 focus:ring-[#3E6AE1]/10 transition-colors cursor-pointer">
                 <option value="">Ganti Pembicara</option>
                 ${participants.map(p => `<option value="${p.name}" ${t.speaker_label === p.name ? 'selected' : ''}>${p.name}</option>`).join('')}
               </select>
             </div>
-            <span class="text-[10px] text-slate-500 font-mono">${t.timestamp || ''}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] text-slate-500 font-mono">${t.timestamp || ''}</span>
+              <button onclick="deleteTranscript('${t.id}')" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 hover:bg-red-555/10 p-1.5 rounded transition-all cursor-pointer flex items-center justify-center" title="Hapus segmen">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
           </div>
           <p contenteditable="true" onblur="updateTranscriptText('${t.id}', this.innerText)" class="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap focus:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-[#3E6AE1]/20 rounded p-1 transition-all">${t.text}</p>
         </div>
@@ -561,6 +566,7 @@ window.updateSpeaker = async function(transcriptId, val) {
       const item = state.currentSession.transcripts.find(t => t.id === transcriptId);
       if (item) item.speaker_label = val;
       showToast('Label pembicara disimpan.');
+      renderTranscripts(state.currentSession.transcripts);
     }
   } catch (err) {
     showToast('Gagal merubah label pembicara.', 'error');
@@ -584,6 +590,38 @@ window.updateTranscriptText = async function(transcriptId, val) {
     }
   } catch (err) {
     showToast('Gagal merubah teks transkrip.', 'error');
+  }
+};
+
+// Delete Transcript Chunk
+window.deleteTranscript = async function(transcriptId) {
+  if (transcriptId.startsWith('temp-')) {
+    const element = document.querySelector(`[data-temp-id="${transcriptId}"]`);
+    if (element) element.remove();
+    showToast('Segmen transkrip dihapus.');
+    return;
+  }
+
+  if (!confirm('Apakah Anda yakin ingin menghapus segmen transkrip ini?')) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/transcripts/${transcriptId}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (data.success) {
+      // Remove from local state
+      state.currentSession.transcripts = state.currentSession.transcripts.filter(t => t.id !== transcriptId);
+      // Re-render
+      renderTranscripts(state.currentSession.transcripts);
+      showToast('Segmen transkrip berhasil dihapus.');
+    } else {
+      showToast('Gagal menghapus segmen transkrip.', 'error');
+    }
+  } catch (err) {
+    showToast('Terjadi kesalahan saat menghapus segmen transkrip.', 'error');
   }
 };
 
@@ -753,6 +791,74 @@ async function uploadAudioFile(file) {
 }
 
 // --- Mic / Tab Recording Core (WebSocket Live Streaming) ---
+// Add transcript block optimistically to the UI before saving to database
+function addOptimisticTranscript(text, speakerName) {
+  const transcriptsList = document.getElementById('transcripts-list');
+  const liveContainer = document.getElementById('live-transcript-container');
+  if (!transcriptsList) return;
+
+  // Remove empty state if present
+  const emptyState = transcriptsList.querySelector('.text-slate-500');
+  if (emptyState && emptyState.textContent.includes('Belum ada transkrip')) {
+    emptyState.remove();
+  }
+
+  const timestamp = new Date().toLocaleTimeString('id-ID');
+  const initials = speakerName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'P';
+  const colors = ['from-cyan-500 to-blue-500', 'from-emerald-500 to-teal-500', 'from-violet-500 to-purple-500',
+    'from-amber-500 to-orange-500', 'from-pink-500 to-rose-500', 'from-indigo-500 to-cyan-500'];
+  const avatarColor = colors[Math.abs(speakerName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % colors.length];
+
+  const participants = state.currentSession?.participants || [];
+  const dropdownOptions = participants.map(p => `<option value="${p.name}" ${speakerName === p.name ? 'selected' : ''}>${p.name}</option>`).join('');
+  const tempId = `temp-${Date.now()}`;
+
+  const bubbleHtml = `    <div class="flex items-start gap-4 p-4 rounded-[8px] chat-bubble-left transition-all duration-200 hover:border-slate-350 group" data-temp-id="${tempId}">
+      <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gradient-to-br ${avatarColor} flex items-center justify-center text-white text-xs font-bold shadow-md">
+        ${initials}
+      </div>
+      <div class="flex-grow min-w-0 space-y-1.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-[#393C41]">${speakerName}</span>
+            <select onchange="updateSpeaker('${tempId}', this.value)" class="bg-white border border-slate-200 text-slate-650 hover:text-[#393C41] rounded-[4px] text-[10px] px-2 py-0.5 focus:outline-none focus:border-[#3E6AE1] focus:ring-2 focus:ring-[#3E6AE1]/10 transition-colors cursor-pointer">
+              <option value="">Ganti Pembicara</option>
+              ${dropdownOptions}
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-slate-500 font-mono">${timestamp}</span>
+            <button onclick="deleteTranscript('${tempId}')" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 hover:bg-red-555/10 p-1.5 rounded transition-all cursor-pointer flex items-center justify-center" title="Hapus segmen">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <p contenteditable="true" onblur="updateTranscriptText('${tempId}', this.innerText)" class="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap focus:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-[#3E6AE1]/20 rounded p-1 transition-all">${escapeHtml(text)}</p>
+      </div>
+    </div>
+  `;
+
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = bubbleHtml.trim();
+  const bubbleElement = tempDiv.firstChild;
+
+  if (liveContainer) {
+    transcriptsList.insertBefore(bubbleElement, liveContainer);
+  } else {
+    transcriptsList.appendChild(bubbleElement);
+  }
+
+  // Ensure 'Generate Minutes' action button container is visible
+  const actionGenerateContainer = document.getElementById('action-generate-container');
+  if (actionGenerateContainer) {
+    actionGenerateContainer.classList.remove('hidden');
+  }
+
+  transcriptsList.scrollTop = transcriptsList.scrollHeight;
+}
+
 async function saveLiveTranscript(text, speakerLabel = '') {
   const id = state.currentSession.session.id;
   try {
@@ -791,6 +897,9 @@ async function triggerSilenceCutOff() {
 
   const liveTextEl = document.getElementById('live-transcript-text');
   if (liveTextEl) liveTextEl.textContent = '';
+
+  // Add block optimistically to transcripts list immediately
+  addOptimisticTranscript(textToSave, speaker);
 
   lastCutOffTime = Date.now();
   await saveLiveTranscript(textToSave, speaker);
@@ -848,7 +957,7 @@ async function startRecording() {
 function setupWebSocketConnection(wsUrl) {
   liveWs = new WebSocket(wsUrl);
 
-  liveWs.onopen = () => {
+  liveWs.onopen = async () => {
     console.log('Browser WebSocket to server opened');
     if (isReconnecting) {
       isReconnecting = false;
@@ -893,17 +1002,8 @@ function setupWebSocketConnection(wsUrl) {
       
       drawVisualizer();
 
-      // ScriptProcessor is simple and works in all environments
-      liveAudioProcessor = liveAudioCtx.createScriptProcessor(2048, 1, 1);
-      
-      liveAudioSource.connect(liveAudioProcessor);
-      liveAudioProcessor.connect(liveAudioCtx.destination);
-      
-      liveAudioProcessor.onaudioprocess = (e) => {
-        if (!state.recording.isRecording) return;
-        
-        const inputData = e.inputBuffer.getChannelData(0);
-
+      // Shared audio processing function
+      const processAudio = (inputData) => {
         // Calculate RMS to detect silence volume
         let sum = 0;
         for (let i = 0; i < inputData.length; i++) {
@@ -912,11 +1012,9 @@ function setupWebSocketConnection(wsUrl) {
         const rms = Math.sqrt(sum / inputData.length);
 
         // Get VAD and Auto Cutoff settings from DOM
-        const chkFilterSilence = document.getElementById('chk-filter-silence-stream');
         const chkAutoSilence = document.getElementById('chk-auto-cutoff-silence');
         const chkAutoTime = document.getElementById('chk-auto-cutoff-time');
 
-        const filterSilence = chkFilterSilence ? chkFilterSilence.checked : true;
         const autoSilence = chkAutoSilence ? chkAutoSilence.checked : true;
         const autoTime = chkAutoTime ? chkAutoTime.checked : true;
 
@@ -929,11 +1027,6 @@ function setupWebSocketConnection(wsUrl) {
               isSilenceActive = true;
               triggerSilenceCutOff();
             }
-          }
-
-          if (filterSilence) {
-            // Do not send silence to Gemini Live WebSocket
-            return;
           }
         } else {
           // Speech detected!
@@ -960,6 +1053,67 @@ function setupWebSocketConnection(wsUrl) {
           liveWs.send(pcmBuffer.buffer);
         }
       };
+
+      // Load AudioWorklet or fallback to ScriptProcessor Node
+      let isWorkletInitialized = false;
+      if (liveAudioCtx.audioWorklet && typeof liveAudioCtx.audioWorklet.addModule === 'function') {
+        try {
+          await liveAudioCtx.audioWorklet.addModule('audio-processor.js');
+          liveAudioProcessor = new AudioWorkletNode(liveAudioCtx, 'audio-processor');
+          
+          liveAudioSource.connect(liveAudioProcessor);
+          liveAudioProcessor.connect(liveAudioCtx.destination);
+          
+          // Accumulate 128-sample chunks from AudioWorklet into a 2048-sample buffer
+          // to align volume threshold check & VAD matching with ScriptProcessor's window.
+          let audioAccumulator = new Float32Array(2048);
+          let accumulatorIndex = 0;
+          
+          liveAudioProcessor.port.onmessage = (e) => {
+            if (!state.recording.isRecording) return;
+            
+            const inputChunks = e.data;
+            let chunkIndex = 0;
+            
+            while (chunkIndex < inputChunks.length) {
+              const remainingSpace = 2048 - accumulatorIndex;
+              const chunkRemaining = inputChunks.length - chunkIndex;
+              const copyLength = Math.min(remainingSpace, chunkRemaining);
+              
+              audioAccumulator.set(inputChunks.subarray(chunkIndex, chunkIndex + copyLength), accumulatorIndex);
+              
+              accumulatorIndex += copyLength;
+              chunkIndex += copyLength;
+              
+              if (accumulatorIndex === 2048) {
+                // Process the filled 2048-sample block
+                processAudio(audioAccumulator);
+                // Reset index but keep allocation
+                accumulatorIndex = 0;
+              }
+            }
+          };
+          
+          isWorkletInitialized = true;
+          console.log('AudioWorkletNode initialized successfully with 2048-sample accumulator');
+        } catch (workletErr) {
+          console.warn('Failed to load AudioWorklet, falling back to ScriptProcessor:', workletErr);
+        }
+      }
+
+      if (!isWorkletInitialized) {
+        liveAudioProcessor = liveAudioCtx.createScriptProcessor(2048, 1, 1);
+        
+        liveAudioSource.connect(liveAudioProcessor);
+        liveAudioProcessor.connect(liveAudioCtx.destination);
+        
+        liveAudioProcessor.onaudioprocess = (e) => {
+          if (!state.recording.isRecording) return;
+          const inputData = e.inputBuffer.getChannelData(0);
+          processAudio(inputData);
+        };
+        console.log('ScriptProcessorNode fallback initialized');
+      }
 
       state.recording.isRecording = true;
       state.recording.startTime = Date.now();
@@ -1029,8 +1183,8 @@ function setupWebSocketConnection(wsUrl) {
     }
   };
 
-  liveWs.onclose = () => {
-    console.log('Browser WebSocket closed');
+  liveWs.onclose = (event) => {
+    console.log(`Browser WebSocket closed. Code: ${event.code}, Reason: ${event.reason || 'No reason provided'}`);
     if (state.recording.isRecording) {
       attemptWebSocketReconnect(wsUrl);
     }
@@ -1533,6 +1687,20 @@ window.setActiveSpeaker = function(speakerName) {
       p.classList.add('active', 'border-[#3E6AE1]/30', 'bg-blue-50/50', 'text-[#3E6AE1]');
     }
   });
+
+  // Update the live transcript container header and avatar if it exists in the DOM
+  const liveContainer = document.getElementById('live-transcript-container');
+  if (liveContainer) {
+    const liveInitials = speakerName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'P';
+    const liveSpeakerHeader = liveContainer.querySelector('.live-speaker-header-label');
+    if (liveSpeakerHeader) {
+      liveSpeakerHeader.innerHTML = `<span class="h-2 w-2 rounded-full bg-red-500 animate-ping"></span> ${speakerName} (Live)`;
+    }
+    const liveAvatar = liveContainer.querySelector('.flex-shrink-0');
+    if (liveAvatar) {
+      liveAvatar.textContent = liveInitials;
+    }
+  }
 };
 
 window.setActiveSpeakerAndCutOff = async function(speakerName) {
@@ -1553,6 +1721,9 @@ window.setActiveSpeakerAndCutOff = async function(speakerName) {
     
     const liveTextEl = document.getElementById('live-transcript-text');
     if (liveTextEl) liveTextEl.textContent = '';
+    
+    // Add block optimistically to transcripts list immediately
+    addOptimisticTranscript(textToSave, prevSpeaker);
     
     await saveLiveTranscript(textToSave, prevSpeaker);
   }
